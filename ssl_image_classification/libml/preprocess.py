@@ -45,32 +45,44 @@ def split_dataset(dataset, num_labeled_data, num_validations, num_classes):
 
     labeled, unlabeled, validation = [], [], []
     for sample in iter(dataset):
-        label = int(sample["label"])
-        counter[label] += 1
-        if counter[label] <= (num_labeled_data / num_classes):
-            labeled.append({
-                "image": sample["image"],
-                "label": sample["label"]
-                })
-            continue
-        elif counter[label] <= (num_validations / num_classes + num_labeled_data / num_classes):
-            validation.append({
-                "image": sample["image"],
-                "label": sample["label"]
+        # Check if the label exists and handle accordingly
+        if "label" in sample:
+            label = int(sample["label"])
+            counter[label] += 1
+            if counter[label] <= (num_labeled_data / num_classes):
+                labeled.append({
+                    "image": sample["image"],
+                    "label": sample["label"]
+                    })
+                continue
+            elif counter[label] <= (num_validations / num_classes + num_labeled_data / num_classes):
+                validation.append({
+                    "image": sample["image"],
+                    "label": sample["label"]
+                    })
+            else:
+                unlabeled.append({
+                    "image": sample["image"],
+                    "label": tf.convert_to_tensor(-1, dtype=tf.int64)
                 })
         else:
+            # If label does not exist, add to unlabeled
             unlabeled.append({
                 "image": sample["image"],
                 "label": tf.convert_to_tensor(-1, dtype=tf.int64)
             })
 
-    shape = labeled[0]["image"].shape
-    labeled = _list_to_tf_dataset(labeled, shape)
-    unlabeled = _list_to_tf_dataset(unlabeled, shape)
-    validation = _list_to_tf_dataset(validation, shape)
+    # Ensure there is at least one labeled sample to define the shape
+    if labeled:
+        shape = labeled[0]["image"].shape
+    else:
+        shape = unlabeled[0]["image"].shape
+
+    labeled = _list_to_tf_dataset(labeled, shape) if labeled else tf.data.Dataset.from_tensors({})
+    unlabeled = _list_to_tf_dataset(unlabeled, shape) if unlabeled else tf.data.Dataset.from_tensors({})
+    validation = _list_to_tf_dataset(validation, shape) if validation else tf.data.Dataset.from_tensors({})
 
     return labeled, unlabeled, validation
-
 
 def _bytes_feature(value):
     if isinstance(value, type(tf.constant(0))):
